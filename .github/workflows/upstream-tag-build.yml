@@ -35,15 +35,13 @@ jobs:
           echo "Latest upstream tag: $LATEST_UPSTREAM_TAG"
           
           # Check if a release already exists for this tag in this repo
-          RELEASE_EXISTS=$(gh release view "$LATEST_UPSTREAM_TAG" 2>&1 || true)
-          
-          if echo "$RELEASE_EXISTS" | grep -q "release not found"; then
+          if gh release view "$LATEST_UPSTREAM_TAG" >/dev/null 2>&1; then
+            echo "has-new-tags=false" >> $GITHUB_OUTPUT
+            echo "Release already exists for tag: $LATEST_UPSTREAM_TAG - skipping"
+          else
             echo "has-new-tags=true" >> $GITHUB_OUTPUT
             echo "tags=$LATEST_UPSTREAM_TAG" >> $GITHUB_OUTPUT
             echo "No release found for tag: $LATEST_UPSTREAM_TAG - will build"
-          else
-            echo "has-new-tags=false" >> $GITHUB_OUTPUT
-            echo "Release already exists for tag: $LATEST_UPSTREAM_TAG - skipping"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
