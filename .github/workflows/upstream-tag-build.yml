@@ -6,6 +6,9 @@ on:
     - cron: '30 */6 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   check-tags:
     runs-on: ubuntu-latest
