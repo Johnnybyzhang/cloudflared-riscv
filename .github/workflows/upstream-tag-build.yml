@@ -29,30 +29,22 @@ jobs:
       - name: Check for new tags
         id: check-new-tags
         run: |
-          # Get all upstream tags
-          UPSTREAM_TAGS=$(git ls-remote --tags upstream | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}' | sort -V | tail -5)
+          # Get the latest upstream tag
+          LATEST_UPSTREAM_TAG=$(git ls-remote --tags upstream | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}' | sort -V | tail -1)
           
-          # Get local tags
-          LOCAL_TAGS=$(git tag -l | sort -V)
+          echo "Latest upstream tag: $LATEST_UPSTREAM_TAG"
           
-          # Find new tags (tags in upstream but not local)
-          NEW_TAGS=""
-          for tag in $UPSTREAM_TAGS; do
-            if ! echo "$LOCAL_TAGS" | grep -q "^${tag}$"; then
-              NEW_TAGS="${NEW_TAGS}${tag} "
-            fi
-          done
-          
-          if [ -n "$NEW_TAGS" ]; then
-            echo "has-new-tags=true" >> $GITHUB_OUTPUT
-            # Take only the latest new tag for building
-            LATEST_TAG=$(echo $NEW_TAGS | tr ' ' '\n' | sort -V | tail -1)
-            echo "tags=$LATEST_TAG" >> $GITHUB_OUTPUT
-            echo "Found new tag: $LATEST_TAG"
-          else
+          # Check if a release already exists for this tag in this repo
+          if gh release view "$LATEST_UPSTREAM_TAG" >/dev/null 2>&1; then
             echo "has-new-tags=false" >> $GITHUB_OUTPUT
-            echo "No new tags found"
+            echo "Release already exists for tag: $LATEST_UPSTREAM_TAG - skipping"
+          else
+            echo "has-new-tags=true" >> $GITHUB_OUTPUT
+            echo "tags=$LATEST_UPSTREAM_TAG" >> $GITHUB_OUTPUT
+            echo "No release found for tag: $LATEST_UPSTREAM_TAG - will build"
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   build:
     needs: check-tags
