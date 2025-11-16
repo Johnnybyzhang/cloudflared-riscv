@@ -1,0 +1,99 @@
+name: Build on Upstream Tag
+
+on:
+  schedule:
+    # Check for new tags every 6 hours
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-tags:
+    runs-on: ubuntu-latest
+    outputs:
+      new-tags: ${{ steps.check-new-tags.outputs.tags }}
+      has-new-tags: ${{ steps.check-new-tags.outputs.has-new-tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch upstream --tags
+
+      - name: Check for new tags
+        id: check-new-tags
+        run: |
+          # Get all upstream tags
+          UPSTREAM_TAGS=$(git ls-remote --tags upstream | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}' | sort -V | tail -5)
+          
+          # Get local tags
+          LOCAL_TAGS=$(git tag -l | sort -V)
+          
+          # Find new tags (tags in upstream but not local)
+          NEW_TAGS=""
+          for tag in $UPSTREAM_TAGS; do
+            if ! echo "$LOCAL_TAGS" | grep -q "^${tag}$"; then
+              NEW_TAGS="${NEW_TAGS}${tag} "
+            fi
+          done
+          
+          if [ -n "$NEW_TAGS" ]; then
+            echo "has-new-tags=true" >> $GITHUB_OUTPUT
+            # Take only the latest new tag for building
+            LATEST_TAG=$(echo $NEW_TAGS | tr ' ' '\n' | sort -V | tail -1)
+            echo "tags=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "Found new tag: $LATEST_TAG"
+          else
+            echo "has-new-tags=false" >> $GITHUB_OUTPUT
+            echo "No new tags found"
+          fi
+
+  build:
+    needs: check-tags
+    if: needs.check-tags.outputs.has-new-tags == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote and fetch tag
+        run: |
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch upstream --tags
+          TAG="${{ needs.check-tags.outputs.new-tags }}"
+          git tag "$TAG" "upstream/$TAG" || true
+          git push origin "$TAG" || true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Build for RISC-V Linux
+        run: |
+          TAG="${{ needs.check-tags.outputs.new-tags }}"
+          echo "Building for tag: $TAG"
+          GOOS=linux GOARCH=riscv64 go build -mod=vendor -o cloudflared-riscv64 ./cmd/cloudflared
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.check-tags.outputs.new-tags }}
+          name: Release ${{ needs.check-tags.outputs.new-tags }}
+          body: |
+            Automated build for upstream tag ${{ needs.check-tags.outputs.new-tags }}
+            Built for RISC-V 64-bit Linux
+          files: |
+            cloudflared-riscv64
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

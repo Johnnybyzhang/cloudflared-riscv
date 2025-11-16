@@ -1,0 +1,73 @@
+name: Sync with Upstream
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch upstream
+
+      - name: Get default branch name
+        id: get-branch
+        run: |
+          # Get the current branch name
+          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Merge upstream changes
+        run: |
+          # Try to merge upstream main or master branch
+          if git ls-remote --heads upstream main | grep main; then
+            UPSTREAM_BRANCH="main"
+          else
+            UPSTREAM_BRANCH="master"
+          fi
+          
+          echo "Merging from upstream/$UPSTREAM_BRANCH"
+          
+          # Merge upstream, but keep our workflows
+          git merge upstream/$UPSTREAM_BRANCH --no-edit --no-commit || true
+          
+          # Always keep our custom workflows (restore them if they were changed)
+          git checkout HEAD -- .github/workflows/sync-upstream.yml || true
+          git checkout HEAD -- .github/workflows/upstream-tag-build.yml || true
+          
+          # Remove any upstream workflow files that were added
+          # Keep only our custom workflows
+          if [ -d .github/workflows ]; then
+            find .github/workflows -type f ! -name 'sync-upstream.yml' ! -name 'upstream-tag-build.yml' -delete
+          fi
+          
+          # Complete the merge
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Merge upstream changes (preserving custom workflows)" || true
+          fi
+
+      - name: Push changes
+        run: |
+          git push origin ${{ steps.get-branch.outputs.branch }}
