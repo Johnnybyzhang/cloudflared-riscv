@@ -34,8 +34,13 @@ jobs:
           
           echo "Latest upstream tag: $LATEST_UPSTREAM_TAG"
           
-          # Check if a release already exists for this tag in this repo
-          if gh release view "$LATEST_UPSTREAM_TAG" >/dev/null 2>&1; then
+          # If manually triggered, always build the latest tag
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "has-new-tags=true" >> $GITHUB_OUTPUT
+            echo "tags=$LATEST_UPSTREAM_TAG" >> $GITHUB_OUTPUT
+            echo "Manual trigger: will build latest tag $LATEST_UPSTREAM_TAG"
+          # For scheduled runs, check if a release already exists
+          elif gh release view "$LATEST_UPSTREAM_TAG" >/dev/null 2>&1; then
             echo "has-new-tags=false" >> $GITHUB_OUTPUT
             echo "Release already exists for tag: $LATEST_UPSTREAM_TAG - skipping"
           else
