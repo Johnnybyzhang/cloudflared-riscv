@@ -24,7 +24,7 @@ jobs:
       - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream --tags
+          git fetch upstream --tags --force
 
       - name: Check for new tags
         id: check-new-tags
@@ -64,7 +64,7 @@ jobs:
       - name: Add upstream remote and fetch tag
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream --tags
+          git fetch upstream --tags --force
           TAG="${{ needs.check-tags.outputs.new-tags }}"
           git tag "$TAG" "upstream/$TAG" || true
           git push origin "$TAG" || true
