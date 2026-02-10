@@ -21,18 +21,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Add upstream remote
-        run: |
-          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream --tags --force
-
       - name: Check for new tags
         id: check-new-tags
         run: |
-          # Get the latest upstream tag
-          LATEST_UPSTREAM_TAG=$(git ls-remote --tags upstream | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}' | sort -V | tail -1)
+          # Get the latest upstream released tag (not just any tag)
+          LATEST_UPSTREAM_TAG=$(gh release list --repo cloudflare/cloudflared --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
           
-          echo "Latest upstream tag: $LATEST_UPSTREAM_TAG"
+          echo "Latest upstream released tag: $LATEST_UPSTREAM_TAG"
           
           # If manually triggered, always build the latest tag
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
