@@ -912,6 +912,7 @@ and virtualized host network stacks from each other`,
 }
 
 func configureProxyFlags(shouldHide bool) []cli.Flag {
+	//nolint: prealloc
 	flags := []cli.Flag{
 		altsrc.NewStringFlag(&cli.StringFlag{
 			Name:    "url",

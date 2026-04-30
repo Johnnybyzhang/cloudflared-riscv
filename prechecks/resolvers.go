@@ -23,9 +23,6 @@ import (
 // system resolver fails, and resolves each discovered hostname via
 // net.LookupIP. The returned slice already has each address tagged with
 // .IPVersion = V4 or V6.
-//
-// Note: allregions.EdgeDiscovery must be exported (currently unexported as
-// edgeDiscovery) before a production adapter can be wired up.
 type DNSResolver interface {
 	// Resolve performs edge discovery for the given region string (empty for
 	// global, "us" / "fed" for regional endpoints) and returns the resolved
