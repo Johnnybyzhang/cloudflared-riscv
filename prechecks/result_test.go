@@ -358,7 +358,6 @@ func TestLogEvent_BothTransportsBlocked(t *testing.T) {
 	assert.Equal(t, "fail", entries[3].Status)
 	assert.Equal(t, "Blocked or unreachable", entries[3].Details)
 
-	// Summary: hard fail is true.
 	summary := entries[len(entries)-1]
 	require.NotNil(t, summary.HardFail)
 	assert.True(t, *summary.HardFail)
@@ -381,7 +380,6 @@ func TestLogEvent_DNSFail(t *testing.T) {
 	assert.Equal(t, "skip", entries[3].Status)
 	assert.Equal(t, "DNS prerequisite failed", entries[3].Details)
 
-	// Summary: hard fail is true.
 	summary := entries[len(entries)-1]
 	require.NotNil(t, summary.HardFail)
 	assert.True(t, *summary.HardFail)

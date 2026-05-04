@@ -57,22 +57,20 @@ type CheckResult struct {
 	Type ProbeType
 
 	// Component is the human-readable probe category shown in the table header
-	// column, e.g. "DNS Resolution", "QUIC Connectivity".
+	// column
 	Component string
 
-	// Target is the address or resource that was probed, e.g.
-	// "region1.v2.argotunnel.com" or "Port 7844 (QUIC)".
+	// Target is the address or resource that was probed
 	Target string
 
 	// ProbeStatus is the outcome of the probe.
 	ProbeStatus Status
 
-	// Details is a short description of the result shown in the table, e.g.
-	// "Resolved successfully" or "Handshake failed".
+	// Details is a short description of the result shown in the table
 	Details string
 
 	// Action is non-empty when ProbeStatus is Fail and contains a human-readable
-	// remediation instruction, e.g. "Allow outbound QUIC on port 7844."
+	// remediation instruction
 	Action string
 }
 
