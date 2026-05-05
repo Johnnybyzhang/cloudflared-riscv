@@ -126,13 +126,14 @@ func collectLogs(
 	if err != nil {
 		return "", fmt.Errorf("error opening log file while collecting logs: %w", err)
 	}
-	defer logHandle.Close()
+	defer func() { _ = logHandle.Close() }()
 
+	// nolint: gosec
 	outputLogHandle, err := os.Create(filepath.Join(os.TempDir(), logFilename))
 	if err != nil {
 		return "", ErrCreatingTemporaryFile
 	}
-	defer outputLogHandle.Close()
+	defer func() { _ = outputLogHandle.Close() }()
 
 	_, err = io.Copy(outputLogHandle, logHandle)
 	if err != nil {
@@ -229,12 +230,13 @@ func networkInformationCollectors() (rawNetworkCollector, jsonNetworkCollector c
 }
 
 func rawNetworkInformationWriter(resultMap map[string]networkCollectionResult) (string, error) {
+	// nolint: gosec
 	networkDumpHandle, err := os.Create(filepath.Join(os.TempDir(), rawNetworkBaseName))
 	if err != nil {
 		return "", ErrCreatingTemporaryFile
 	}
 
-	defer networkDumpHandle.Close()
+	defer func() { _ = networkDumpHandle.Close() }()
 
 	var exitErr error
 
@@ -260,12 +262,13 @@ func rawNetworkInformationWriter(resultMap map[string]networkCollectionResult) (
 }
 
 func jsonNetworkInformationWriter(resultMap map[string]networkCollectionResult) (string, error) {
+	// nolint: gosec
 	networkDumpHandle, err := os.Create(filepath.Join(os.TempDir(), networkBaseName))
 	if err != nil {
 		return "", ErrCreatingTemporaryFile
 	}
 
-	defer networkDumpHandle.Close()
+	defer func() { _ = networkDumpHandle.Close() }()
 
 	encoder := newFormattedEncoder(networkDumpHandle)
 
@@ -290,11 +293,12 @@ func jsonNetworkInformationWriter(resultMap map[string]networkCollectionResult) 
 
 func collectFromEndpointAdapter(collect collectToWriterFunc, fileName string) collectFunc {
 	return func(ctx context.Context) (string, error) {
+		// nolint: gosec
 		dumpHandle, err := os.Create(filepath.Join(os.TempDir(), fileName))
 		if err != nil {
 			return "", ErrCreatingTemporaryFile
 		}
-		defer dumpHandle.Close()
+		defer func() { _ = dumpHandle.Close() }()
 
 		err = collect(ctx, dumpHandle)
 		if err != nil {
@@ -349,12 +353,12 @@ func resolveInstanceBaseURL(
 		if !strings.HasPrefix(metricsServerAddress, "http://") {
 			metricsServerAddress = "http://" + metricsServerAddress
 		}
-		url, err := url.Parse(metricsServerAddress)
+		baseUrl, err := url.Parse(metricsServerAddress)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("provided address is not valid: %w", err)
 		}
 
-		return url, nil, nil, nil
+		return baseUrl, nil, nil, nil
 	}
 
 	tunnelState, foundTunnelStates, err := FindMetricsServer(log, client, addresses)
@@ -436,11 +440,12 @@ func createJobs(
 }
 
 func createTaskReport(taskReport map[string]taskResult) (string, error) {
+	// nolint: gosec
 	dumpHandle, err := os.Create(filepath.Join(os.TempDir(), taskResultBaseName))
 	if err != nil {
 		return "", ErrCreatingTemporaryFile
 	}
-	defer dumpHandle.Close()
+	defer func() { _ = dumpHandle.Close() }()
 
 	encoder := newFormattedEncoder(dumpHandle)
 
@@ -545,7 +550,7 @@ func RunDiagnostic(
 
 		defer func() {
 			if !errors.Is(v.Err, ErrCreatingTemporaryFile) {
-				os.Remove(v.path)
+				_ = os.Remove(v.path)
 			}
 		}()
 	}
