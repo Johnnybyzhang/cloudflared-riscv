@@ -19,6 +19,10 @@ import (
 	"github.com/cloudflare/cloudflared/mocks"
 )
 
+const (
+	emptyCert = ""
+)
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -114,7 +118,7 @@ func TestRun_AllPass(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS + 2 QUIC + 2 HTTP2 + 1 API = 7 results.
@@ -145,7 +149,7 @@ func TestRun_QUICBlocked(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS Pass + 2 QUIC Fail + 2 HTTP2 Pass + 1 API Pass.
@@ -175,7 +179,7 @@ func TestRun_HTTP2Blocked(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS Pass + 2 QUIC Pass + 2 HTTP2 Fail + 1 API Pass.
@@ -205,7 +209,7 @@ func TestRun_BothTransportsBlocked(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS Pass + 2 QUIC Fail + 2 HTTP2 Fail + 1 API Pass.
@@ -244,7 +248,7 @@ func TestRun_PartialRegionQUICFail(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS Pass + QUIC-region1 Pass + QUIC-region2 Fail + 2 HTTP2 Pass + 1 API Pass.
@@ -277,7 +281,7 @@ func TestRun_DNSFail_SkipsTransports(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// DNS failure emits 2 Fail rows (one per default region).
@@ -314,7 +318,7 @@ func TestRun_ManagementAPIFail(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("connection refused")).AnyTimes()
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS Pass + 2 QUIC Pass + 2 HTTP2 Pass + 1 API Fail.
@@ -345,7 +349,7 @@ func TestRun_RegionFlagForwardedToDNS(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Region: "us", Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Region: "us", Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// DNS rows carry regional hostnames (indices 0 and 1).
@@ -383,7 +387,7 @@ func TestRun_QUICUsesProbeConnIndex(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 }
 
@@ -407,7 +411,7 @@ func TestRun_BothFamiliesProbed(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.Auto},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	// 2 DNS + 2 QUIC + 2 HTTP2 + 1 API = 7 results, all passing.
@@ -437,7 +441,7 @@ func TestRun_IPv4OnlySkipsV6(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.IPv4Only},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.IPv4Only},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	requireStatuses(t, report, Pass, Pass, Pass, Pass, Pass, Pass, Pass)
@@ -464,7 +468,7 @@ func TestRun_IPv6OnlySkipsV4(t *testing.T) {
 	mgmt.EXPECT().DialContext(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nopConn{}, nil)
 
-	report := Run(t.Context(), Config{Timeout: 2 * time.Second, IPVersion: allregions.IPv6Only},
+	report := Run(t.Context(), emptyCert, Config{Timeout: 2 * time.Second, IPVersion: allregions.IPv6Only},
 		nopLogger(), RunDialers{DNSResolver: dns, TCPDialer: tcp, QUICDialer: quicD, ManagementDialer: mgmt})
 
 	requireStatuses(t, report, Pass, Pass, Pass, Pass, Pass, Pass, Pass)

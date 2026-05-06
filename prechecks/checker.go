@@ -2,6 +2,7 @@ package prechecks
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
@@ -54,7 +55,7 @@ func (tr TransportResults) Collect() []CheckResult {
 //
 // Each failed probe is retried up to maxRetries times with exponential backoff.
 // The suite is bounded by cfg.Timeout (defaultTimeout if zero).
-func Run(ctx context.Context, cfg Config, log *zerolog.Logger, runDialers RunDialers) Report {
+func Run(ctx context.Context, caCert string, cfg Config, log *zerolog.Logger, runDialers RunDialers) Report {
 	runID := uuid.New()
 
 	if cfg.Timeout <= 0 {
@@ -62,6 +63,10 @@ func Run(ctx context.Context, cfg Config, log *zerolog.Logger, runDialers RunDia
 	}
 	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
+
+	// Build TLS configs once per protocol
+	quicTLSConfig, quicTLSErr := probeTLSConfig(caCert, connection.QUIC)
+	http2TLSConfig, http2TLSErr := probeTLSConfig(caCert, connection.HTTP2)
 
 	// 1) DNS – must complete before transport probes know which addresses to dial.
 	addrGroups, dnsResults := runDNSProbe(ctx, runDialers.DNSResolver, cfg.Region)
@@ -81,8 +86,8 @@ func Run(ctx context.Context, cfg Config, log *zerolog.Logger, runDialers RunDia
 
 	if !dnsOK {
 		// DNS failed: emit one skip row per region so the table stays consistent.
-		results.QUIC = skipResultsForRegions(dnsResults, ProbeTypeQUIC, "UDP Connectivity")
-		results.HTTP2 = skipResultsForRegions(dnsResults, ProbeTypeHTTP2, "TCP Connectivity")
+		results.QUIC = skipResultsForRegions(dnsResults, ProbeTypeQUIC, componentUDPConnectivity)
+		results.HTTP2 = skipResultsForRegions(dnsResults, ProbeTypeHTTP2, componentTCPConnectivity)
 	} else {
 		perRegionAddrs := addrsByRegion(addrGroups, cfg.IPVersion)
 		regionTargets := dnsTargets(dnsResults)
@@ -91,18 +96,30 @@ func Run(ctx context.Context, cfg Config, log *zerolog.Logger, runDialers RunDia
 		http2Ch := make(chan []CheckResult, 1)
 
 		go func() {
-			quicCh <- probeAllRegions(ctx, ProbeTypeQUIC, "UDP Connectivity",
+			if quicTLSErr != nil {
+				log.Warn().Err(quicTLSErr).Msg("Failed to build QUIC probe TLS config")
+				quicCh <- tlsConfigErrResults(ProbeTypeQUIC, componentUDPConnectivity,
+					regionTargets, fmt.Sprintf("%s: %v", detailsTLSConfigFailed, quicTLSErr), actionQUICBlocked)
+				return
+			}
+			quicCh <- probeAllRegions(ctx, ProbeTypeQUIC, componentUDPConnectivity,
 				perRegionAddrs, regionTargets,
 				func(addr *allregions.EdgeAddr) CheckResult {
-					return probeQUIC(ctx, runDialers.QUICDialer, addr, log)
+					return probeQUIC(ctx, quicTLSConfig, runDialers.QUICDialer, addr, log)
 				})
 		}()
 
 		go func() {
-			http2Ch <- probeAllRegions(ctx, ProbeTypeHTTP2, "TCP Connectivity",
+			if http2TLSErr != nil {
+				log.Warn().Err(http2TLSErr).Msg("Failed to build HTTP/2 probe TLS config")
+				http2Ch <- tlsConfigErrResults(ProbeTypeHTTP2, componentTCPConnectivity,
+					regionTargets, fmt.Sprintf("%s: %v", detailsTLSConfigFailed, http2TLSErr), actionHTTP2Blocked)
+				return
+			}
+			http2Ch <- probeAllRegions(ctx, ProbeTypeHTTP2, componentTCPConnectivity,
 				perRegionAddrs, regionTargets,
 				func(addr *allregions.EdgeAddr) CheckResult {
-					return probeHTTP2(ctx, runDialers.TCPDialer, addr)
+					return probeHTTP2(ctx, http2TLSConfig, runDialers.TCPDialer, addr)
 				})
 		}()
 
@@ -117,6 +134,23 @@ func Run(ctx context.Context, cfg Config, log *zerolog.Logger, runDialers RunDia
 		Results:           append(dnsResults, results.Collect()...),
 		SuggestedProtocol: suggestProtocol(results.QUIC, results.HTTP2),
 	}
+}
+
+// tlsConfigErrResults returns one Fail CheckResult per region target, used when
+// TLS config construction fails before any dial is attempted.
+func tlsConfigErrResults(probeType ProbeType, component string, regionTargets []string, details, action string) []CheckResult {
+	results := make([]CheckResult, len(regionTargets))
+	for i, target := range regionTargets {
+		results[i] = CheckResult{
+			Type:        probeType,
+			Component:   component,
+			Target:      target,
+			ProbeStatus: Fail,
+			Details:     details,
+			Action:      action,
+		}
+	}
+	return results
 }
 
 func runDNSProbe(ctx context.Context, resolver DNSResolver, region string) ([][]*allregions.EdgeAddr, []CheckResult) {

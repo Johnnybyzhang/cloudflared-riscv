@@ -2,6 +2,7 @@ package prechecks
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"testing"
@@ -24,11 +25,13 @@ const (
 	testRegion2US     = region2US
 	testRegion1Fed    = region1Fed
 	testRegion2Fed    = region2Fed
-	testRegion1EU     = "eu-region1.v2.argotunnel.com"
-	testRegion2EU     = "eu-region2.v2.argotunnel.com"
 
 	testEdgePort = 7844
 )
+
+// testTLSConfig is a minimal *tls.Config for tests. Mock dialers never
+// perform a real TLS handshake, so an empty config is sufficient.
+var testTLSConfig = &tls.Config{} //nolint:gosec
 
 // mockQuicConnection is a minimal test double for quic.Connection.
 type mockQuicConnection struct {
@@ -231,7 +234,7 @@ func TestProbeQUIC_Success(t *testing.T) {
 	addr := createTestEdgeAddr("192.0.2.1", testEdgePort, allregions.V4)
 	logger := zerolog.New(nil)
 
-	result := probeQUIC(context.Background(), dialer, addr, &logger)
+	result := probeQUIC(context.Background(), testTLSConfig, dialer, addr, &logger)
 
 	assert.Equal(t, ProbeTypeQUIC, result.Type)
 	assert.Equal(t, Pass, result.ProbeStatus)
@@ -249,7 +252,7 @@ func TestProbeQUIC_DialError(t *testing.T) {
 	addr := createTestEdgeAddr("192.0.2.1", testEdgePort, allregions.V4)
 	logger := zerolog.New(nil)
 
-	result := probeQUIC(context.Background(), dialer, addr, &logger)
+	result := probeQUIC(context.Background(), testTLSConfig, dialer, addr, &logger)
 
 	assert.Equal(t, ProbeTypeQUIC, result.Type)
 	assert.Equal(t, Fail, result.ProbeStatus)
@@ -269,7 +272,7 @@ func TestProbeQUIC_CloseErrorDoesNotAffectResult(t *testing.T) {
 	addr := createTestEdgeAddr("192.0.2.1", testEdgePort, allregions.V4)
 	logger := zerolog.New(nil)
 
-	result := probeQUIC(context.Background(), dialer, addr, &logger)
+	result := probeQUIC(context.Background(), testTLSConfig, dialer, addr, &logger)
 
 	assert.Equal(t, ProbeTypeQUIC, result.Type)
 	assert.Equal(t, Pass, result.ProbeStatus)
@@ -287,7 +290,7 @@ func TestProbeQUIC_ContextTimeout(t *testing.T) {
 	addr := createTestEdgeAddr("192.0.2.1", testEdgePort, allregions.V4)
 	logger := zerolog.New(nil)
 
-	result := probeQUIC(context.Background(), dialer, addr, &logger)
+	result := probeQUIC(context.Background(), testTLSConfig, dialer, addr, &logger)
 
 	assert.Equal(t, Fail, result.ProbeStatus)
 	assert.Equal(t, detailsHandshakeFailed, result.Details)
@@ -305,7 +308,7 @@ func TestProbeHTTP2_Success(t *testing.T) {
 
 	addr := createTestEdgeAddr("192.0.2.1", testEdgePort, allregions.V4)
 
-	result := probeHTTP2(context.Background(), dialer, addr)
+	result := probeHTTP2(context.Background(), testTLSConfig, dialer, addr)
 
 	assert.Equal(t, ProbeTypeHTTP2, result.Type)
 	assert.Equal(t, Pass, result.ProbeStatus)
@@ -322,7 +325,7 @@ func TestProbeHTTP2_DialError(t *testing.T) {
 
 	addr := createTestEdgeAddr("192.0.2.1", testEdgePort, allregions.V4)
 
-	result := probeHTTP2(context.Background(), dialer, addr)
+	result := probeHTTP2(context.Background(), testTLSConfig, dialer, addr)
 
 	assert.Equal(t, ProbeTypeHTTP2, result.Type)
 	assert.Equal(t, Fail, result.ProbeStatus)
@@ -512,7 +515,7 @@ func TestProbeQUIC_IPv6Address(t *testing.T) {
 	addr := createTestEdgeAddr("2001:db8::1", testEdgePort, allregions.V6)
 	logger := zerolog.New(nil)
 
-	result := probeQUIC(context.Background(), dialer, addr, &logger)
+	result := probeQUIC(context.Background(), testTLSConfig, dialer, addr, &logger)
 
 	assert.Equal(t, Pass, result.ProbeStatus)
 	assert.Equal(t, detailsHandshakeSuccessful, result.Details)
@@ -530,7 +533,7 @@ func TestProbeHTTP2_IPv6Address(t *testing.T) {
 
 	addr := createTestEdgeAddr("2001:db8::1", testEdgePort, allregions.V6)
 
-	result := probeHTTP2(context.Background(), dialer, addr)
+	result := probeHTTP2(context.Background(), testTLSConfig, dialer, addr)
 
 	assert.Equal(t, Pass, result.ProbeStatus)
 }

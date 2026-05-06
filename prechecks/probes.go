@@ -17,6 +17,7 @@ import (
 	"github.com/cloudflare/cloudflared/connection"
 	edgedial "github.com/cloudflare/cloudflared/edgediscovery"
 	"github.com/cloudflare/cloudflared/edgediscovery/allregions"
+	"github.com/cloudflare/cloudflared/tlsconfig"
 )
 
 const (
@@ -50,6 +51,7 @@ const (
 	detailsConnectionFailed       = "Connection failed"
 	detailsTCPPortReachable       = "TCP port reachable (TLS not validated)"
 	detailsDNSPrerequisiteFailed  = "DNS prerequisite failed"
+	detailsTLSConfigFailed        = "TLS configuration failed"
 
 	// Region hostname templates.
 	region1Global = "region1.v2.argotunnel.com"
@@ -103,6 +105,25 @@ func (d *NetManagementDialer) DialContext(ctx context.Context, network, addr str
 	return d.Dialer.DialContext(ctx, network, addr)
 }
 
+// probeTLSConfig builds a *tls.Config for a pre-check probe using the same
+// certificate pool as the production tunnel. The SNI and NextProtos are taken from
+// p.ProbeTLSSettings() so that the probe SNI is used instead of the production SNI,
+// which avoids noisy logs in origintunneld.
+func probeTLSConfig(caCert string, p connection.Protocol) (*tls.Config, error) {
+	settings := p.ProbeTLSSettings()
+	if settings == nil {
+		return nil, fmt.Errorf("no probe TLS settings for protocol %s", p)
+	}
+	cfg, err := tlsconfig.CreateTunnelConfig(caCert, settings.ServerName)
+	if err != nil {
+		return nil, err
+	}
+	if len(settings.NextProtos) > 0 {
+		cfg.NextProtos = settings.NextProtos
+	}
+	return cfg, nil
+}
+
 // probeDNS resolves edge addresses for the given region via the supplied
 // DNSResolver and returns a CheckResult for each region discovered. If
 // resolution fails for all regions, every result will carry StatusFail.
@@ -153,20 +174,13 @@ func probeDNS(
 // budget.
 func probeQUIC(
 	ctx context.Context,
+	tlsConfig *tls.Config,
 	dialer QUICDialer,
 	addr *allregions.EdgeAddr,
 	logger *zerolog.Logger,
 ) CheckResult {
 	dialCtx, cancel := context.WithTimeout(ctx, perProbeDialTimeout)
 	defer cancel()
-
-	tlsSettings := connection.QUIC.ProbeTLSSettings()
-	tlsConfig := &tls.Config{
-		ServerName:       tlsSettings.ServerName,
-		NextProtos:       tlsSettings.NextProtos,
-		MinVersion:       tls.VersionTLS13,
-		CurvePreferences: []tls.CurveID{tls.CurveP256},
-	}
 
 	// We call dialer.DialQuic with isProbe = true, which bypasses connIndex check.
 	// Therefore, whatever we add to connIndex will not be relevant.
@@ -213,14 +227,7 @@ func probeQUIC(
 //
 // The dial timeout is capped at perProbeDialTimeout so that a single blocked
 // dial cannot exhaust the entire suite budget.
-func probeHTTP2(ctx context.Context, dialer TCPDialer, addr *allregions.EdgeAddr) CheckResult {
-	tlsSettings := connection.HTTP2.ProbeTLSSettings()
-	tlsConfig := &tls.Config{
-		ServerName:       tlsSettings.ServerName,
-		MinVersion:       tls.VersionTLS12,
-		CurvePreferences: []tls.CurveID{tls.CurveP256},
-	}
-
+func probeHTTP2(ctx context.Context, tlsConfig *tls.Config, dialer TCPDialer, addr *allregions.EdgeAddr) CheckResult {
 	conn, err := dialer.DialEdge(ctx, perProbeDialTimeout, tlsConfig, addr.TCP, nil)
 	if err != nil {
 		return CheckResult{

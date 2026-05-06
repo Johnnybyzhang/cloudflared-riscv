@@ -168,7 +168,7 @@ func prepareTunnelConfig(
 		if tlsSettings == nil {
 			return nil, nil, fmt.Errorf("%s has unknown TLS settings", p)
 		}
-		edgeTLSConfig, err := tlsconfig.CreateTunnelConfig(c, tlsSettings.ServerName)
+		edgeTLSConfig, err := tlsconfig.CreateTunnelConfig(c.String(flags.CACert), tlsSettings.ServerName)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "unable to create TLS config to connect with edge")
 		}

@@ -642,7 +642,7 @@ func tunnelFlags(shouldHide bool) []cli.Flag {
 			Hidden:  false,
 		}),
 		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    tlsconfig.CaCertFlag,
+			Name:    cfdflags.CACert,
 			Usage:   "Certificate Authority authenticating connections with Cloudflare's edge network.",
 			EnvVars: []string{"TUNNEL_CACERT"},
 			Hidden:  true,
