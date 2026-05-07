@@ -62,12 +62,28 @@ const (
 	region2Fed    = "fed-region2.v2.argotunnel.com"
 )
 
+// EdgeDNSResolver implements DNSResolver for the standard DNS-based edge
+// discovery path.
 type EdgeDNSResolver struct {
 	Log *zerolog.Logger
 }
 
 func (r *EdgeDNSResolver) Resolve(region string) ([][]*allregions.EdgeAddr, error) {
 	return allregions.EdgeDiscovery(r.Log, allregions.RegionalServiceName(region))
+}
+
+// StaticEdgeDNSResolver implements DNSResolver for the --edge flag path.
+type StaticEdgeDNSResolver struct {
+	Addrs []string
+	Log   *zerolog.Logger
+}
+
+func (r *StaticEdgeDNSResolver) Resolve(_ string) ([][]*allregions.EdgeAddr, error) {
+	resolved := allregions.ResolveAddrs(r.Addrs, r.Log)
+	if len(resolved) == 0 {
+		return nil, fmt.Errorf("failed to resolve any edge address")
+	}
+	return [][]*allregions.EdgeAddr{resolved}, nil
 }
 
 type EdgeTCPDialer struct{}
