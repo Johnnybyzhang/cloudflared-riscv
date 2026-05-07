@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -31,11 +32,13 @@ import (
 	"github.com/cloudflare/cloudflared/credentials"
 	"github.com/cloudflare/cloudflared/diagnostic"
 	"github.com/cloudflare/cloudflared/edgediscovery"
+	"github.com/cloudflare/cloudflared/edgediscovery/allregions"
 	"github.com/cloudflare/cloudflared/ingress"
 	"github.com/cloudflare/cloudflared/logger"
 	"github.com/cloudflare/cloudflared/management"
 	"github.com/cloudflare/cloudflared/metrics"
 	"github.com/cloudflare/cloudflared/orchestration"
+	"github.com/cloudflare/cloudflared/prechecks"
 	"github.com/cloudflare/cloudflared/signal"
 	"github.com/cloudflare/cloudflared/supervisor"
 	"github.com/cloudflare/cloudflared/tlsconfig"
@@ -372,6 +375,17 @@ func StartServer(
 	info.Log(log)
 	logClientOptions(c, log)
 
+	// Run connectivity pre-checks for cloudflared. This runs in a separate
+	// goroutine, as we want to keep initializing cloudflared while prechecks
+	// are running.
+	if c.Bool(cfdflags.Prechecks) && !c.Bool(cfdflags.NoPrechecks) {
+		resolvedRegion := c.String(cfdflags.Region)
+		if resolvedRegion == "" && namedTunnel != nil {
+			resolvedRegion = namedTunnel.Credentials.Endpoint
+		}
+		go runPrechecks(c, log, resolvedRegion)
+	}
+
 	// this context drives the server, when it's canceled tunnel and all other components (origins, dns, etc...) should stop
 	ctx, cancel := context.WithCancel(c.Context)
 	defer cancel()
@@ -511,6 +525,49 @@ func StartServer(
 		return err
 	}
 	return waitToShutdown(&wg, cancel, errC, graceShutdownC, gracePeriod, log)
+}
+
+// runPrechecks executes connectivity pre-checks and logs the results.
+// Pre-checks are diagnostic only and do not gate tunnel startup.
+func runPrechecks(c *cli.Context, log *zerolog.Logger, region string) {
+	ipVersion := allregions.Auto
+	if ipVersionStr := c.String(cfdflags.EdgeIpVersion); ipVersionStr != "" {
+		parsedVersion, err := parseConfigIPVersion(ipVersionStr)
+		if err == nil {
+			ipVersion = parsedVersion
+		} else {
+			log.Warn().Str("edgeIpVersion", ipVersionStr).Err(err).Msg("Invalid edge-ip-version value, using auto")
+		}
+	}
+
+	cfg := prechecks.Config{
+		Region:    region,
+		IPVersion: ipVersion,
+	}
+
+	// Mirror the static/dynamic edge selection from supervisor/supervisor.go:
+	// when --edge addresses are provided, bypass DNS discovery entirely.
+	var dnsResolver prechecks.DNSResolver
+	if edgeAddrs := c.StringSlice(cfdflags.Edge); len(edgeAddrs) > 0 {
+		dnsResolver = &prechecks.StaticEdgeDNSResolver{Addrs: edgeAddrs, Log: log}
+	} else {
+		dnsResolver = &prechecks.EdgeDNSResolver{Log: log}
+	}
+
+	dialers := prechecks.RunDialers{
+		DNSResolver:      dnsResolver,
+		TCPDialer:        &prechecks.EdgeTCPDialer{},
+		QUICDialer:       &prechecks.EdgeQUICDialer{},
+		ManagementDialer: &prechecks.NetManagementDialer{Dialer: net.Dialer{}},
+	}
+
+	report := prechecks.Run(c.Context, c.String(cfdflags.CACert), cfg, log, dialers)
+
+	// Output the human-readable table to console
+	fmt.Println(report.String())
+
+	// Also log structured results for log aggregation
+	report.LogEvent(log)
 }
 
 func waitToShutdown(wg *sync.WaitGroup,
@@ -886,6 +943,13 @@ func configureCloudflaredFlags(shouldHide bool) []cli.Flag {
 			Name:    cfdflags.NoPrechecks,
 			Usage:   "Skip connectivity pre-checks at startup.",
 			EnvVars: []string{"TUNNEL_NO_PRECHECKS"},
+			Value:   false,
+			Hidden:  shouldHide,
+		}),
+		altsrc.NewBoolFlag(&cli.BoolFlag{
+			Name:    cfdflags.Prechecks,
+			Usage:   "Run connectivity pre-checks at startup.",
+			EnvVars: []string{"TUNNEL_PRECHECKS"},
 			Value:   false,
 			Hidden:  shouldHide,
 		}),

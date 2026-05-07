@@ -489,7 +489,7 @@ func readyCommand(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	// nolint: gosec
+	// nolint: gosec // URL is constructed from the user-configured local metrics endpoint.
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -1109,6 +1109,7 @@ func diagCommand(ctx *cli.Context) error {
 		Address:        sctx.c.String(flags.Metrics),
 		ContainerID:    sctx.c.String(diagContainerIDFlagName),
 		PodID:          sctx.c.String(diagPodFlagName),
+		Region:         sctx.c.String(flags.Region),
 		Toggles: diagnostic.Toggles{
 			NoDiagLogs:    sctx.c.Bool(noDiagLogsFlagName),
 			NoDiagMetrics: sctx.c.Bool(noDiagMetricsFlagName),
