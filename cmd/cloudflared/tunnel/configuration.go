@@ -140,23 +140,13 @@ func prepareTunnelConfig(
 	}
 	tags = append(tags, pogs.Tag{Name: "ID", Value: clientConfig.ConnectorID.String()})
 
-	clientFeatures := featureSelector.Snapshot()
-	pqMode := clientFeatures.PostQuantum
-	if pqMode == features.PostQuantumStrict {
-		// Error if the user tries to force a non-quic transport protocol
-		if transportProtocol != connection.AutoSelectFlag && transportProtocol != connection.QUIC.String() {
-			return nil, nil, fmt.Errorf("post-quantum is only supported with the quic transport")
-		}
-		transportProtocol = connection.QUIC.String()
-	}
-
 	cfg := config.GetConfiguration()
 	ingressRules, err := ingress.ParseIngressFromConfigAndCLI(cfg, c, log)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	protocolSelector, err := connection.NewProtocolSelector(transportProtocol, namedTunnel.Credentials.AccountTag, c.IsSet(TunnelTokenFlag), isPostQuantumEnforced, edgediscovery.ProtocolPercentage, connection.ResolveTTL, log)
+	protocolSelector, err := connection.NewProtocolSelector(transportProtocol, namedTunnel.Credentials.AccountTag, c.IsSet(TunnelTokenFlag), edgediscovery.ProtocolPercentage, connection.ResolveTTL, log)
 	if err != nil {
 		return nil, nil, err
 	}

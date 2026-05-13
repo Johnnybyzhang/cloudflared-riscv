@@ -224,18 +224,10 @@ func NewProtocolSelector(
 	protocolFlag string,
 	accountTag string,
 	tunnelTokenProvided bool,
-	needPQ bool,
 	protocolFetcher edgediscovery.PercentageFetcher,
 	resolveTTL time.Duration,
 	log *zerolog.Logger,
 ) (ProtocolSelector, error) {
-	// With --post-quantum, we force quic
-	if needPQ {
-		return &staticProtocolSelector{
-			current: QUIC,
-		}, nil
-	}
-
 	threshold := switchThreshold(accountTag)
 	fetchedProtocol, err := getProtocol(ProtocolList, protocolFetcher, threshold)
 	log.Debug().Msgf("Fetched protocol: %s", fetchedProtocol)

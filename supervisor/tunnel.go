@@ -20,6 +20,7 @@ import (
 	"github.com/cloudflare/cloudflared/client"
 	"github.com/cloudflare/cloudflared/connection"
 	"github.com/cloudflare/cloudflared/connection/dialopts"
+	cfdcrypto "github.com/cloudflare/cloudflared/crypto"
 	"github.com/cloudflare/cloudflared/edgediscovery"
 	"github.com/cloudflare/cloudflared/edgediscovery/allregions"
 	"github.com/cloudflare/cloudflared/features"
@@ -88,6 +89,10 @@ func (c *TunnelConfig) connectionOptions(originLocalAddr string, previousAttempt
 	host, _, _ := net.SplitHostPort(originLocalAddr)
 	originIP := net.ParseIP(host)
 	return c.ClientConfig.ConnectionOptionsSnapshot(originIP, previousAttempts)
+}
+
+func (c *TunnelConfig) connectionFeatures() features.FeatureSnapshot {
+	return c.ClientConfig.ConnectionFeaturesSnapshot()
 }
 
 func StartTunnelDaemon(
@@ -473,12 +478,21 @@ func (e *EdgeTunnelServer) serveConnection(
 			connIndex)
 
 	case connection.HTTP2:
-		edgeConn, err := edgediscovery.DialEdge(ctx, dialTimeout, e.config.EdgeTLSConfigs[protocol], addr.TCP, e.edgeBindAddr)
+		tlsConfig, err := cfdcrypto.TLSConfigWithCurvePreferences(e.config.EdgeTLSConfigs[protocol], e.config.connectionFeatures().PostQuantum)
+		if err != nil {
+			return fmt.Errorf("could not create TLS configuration: %w", err), true
+		}
+
+		connLog.Logger().Info().Msgf("Tunnel connection curve preferences: %v", tlsConfig.CurvePreferences)
+
+		edgeConn, err := edgediscovery.DialEdge(ctx, dialTimeout, tlsConfig, addr.TCP, e.edgeBindAddr)
 		if err != nil {
 			connLog.ConnAwareLogger().Err(err).Msg("Unable to establish connection with Cloudflare edge")
 			return err, true
 		}
 
+		// Rebuild the connection options with the local address now that the
+		// edge socket is established.
 		// nolint: gosec
 		connOptions := e.config.connectionOptions(edgeConn.LocalAddr().String(), uint8(backoff.Retries()))
 		// nolint: zerologlint
@@ -516,11 +530,9 @@ func (e *EdgeTunnelServer) serveHTTP2(
 	controlStreamHandler connection.ControlStreamHandler,
 	connIndex uint8,
 ) error {
-	pqMode := connOptions.FeatureSnapshot.PostQuantum
-	if pqMode == features.PostQuantumStrict {
-		return unrecoverableError{errors.New("HTTP/2 transport does not support post-quantum")}
-	}
-
+	// HTTP/2 supports post-quantum key exchange the same way QUIC does. Curve
+	// preferences are applied by the caller before the TLS handshake in
+	// DialEdge (see TUN-10413).
 	connLog.Logger().Debug().Msgf("Connecting via http2")
 	h2conn := connection.NewHTTP2Connection(
 		tlsServerConn,
@@ -558,18 +570,12 @@ func (e *EdgeTunnelServer) serveQUIC(
 	controlStreamHandler connection.ControlStreamHandler,
 	connIndex uint8,
 ) (err error, recoverable bool) {
-	tlsConfig := e.config.EdgeTLSConfigs[connection.QUIC]
-
-	pqMode := connOptions.FeatureSnapshot.PostQuantum
-	curvePref, err := curvePreference(pqMode, fips.IsFipsEnabled(), tlsConfig.CurvePreferences)
+	config, err := cfdcrypto.TLSConfigWithCurvePreferences(e.config.EdgeTLSConfigs[connection.QUIC], connOptions.FeatureSnapshot.PostQuantum)
 	if err != nil {
-		connLogger.ConnAwareLogger().Err(err).Msgf("failed to get curve preferences")
-		return err, true
+		return fmt.Errorf("could not create TLS configuration: %w", err), true
 	}
 
-	connLogger.Logger().Info().Msgf("Tunnel connection curve preferences: %v", curvePref)
-
-	tlsConfig.CurvePreferences = curvePref
+	connLogger.Logger().Info().Msgf("Tunnel connection curve preferences: %v", config.CurvePreferences)
 
 	// quic-go 0.44 increases the initial packet size to 1280 by default. That breaks anyone running tunnel through WARP
 	// because WARP MTU is 1280.
@@ -596,7 +602,7 @@ func (e *EdgeTunnelServer) serveQUIC(
 	conn, err := connection.DialQuic(
 		ctx,
 		quicConfig,
-		tlsConfig,
+		config,
 		edgeAddr,
 		e.edgeBindAddr,
 		connIndex,
