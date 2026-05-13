@@ -375,17 +375,6 @@ func StartServer(
 	info.Log(log)
 	logClientOptions(c, log)
 
-	// Run connectivity pre-checks for cloudflared. This runs in a separate
-	// goroutine, as we want to keep initializing cloudflared while prechecks
-	// are running.
-	if c.Bool(cfdflags.Prechecks) && !c.Bool(cfdflags.NoPrechecks) {
-		resolvedRegion := c.String(cfdflags.Region)
-		if resolvedRegion == "" && namedTunnel != nil {
-			resolvedRegion = namedTunnel.Credentials.Endpoint
-		}
-		go runPrechecks(c, log, resolvedRegion)
-	}
-
 	// this context drives the server, when it's canceled tunnel and all other components (origins, dns, etc...) should stop
 	ctx, cancel := context.WithCancel(c.Context)
 	defer cancel()
@@ -427,6 +416,13 @@ func StartServer(
 		return err
 	}
 	connectorID := tunnelConfig.ClientConfig.ConnectorID
+
+	// Run connectivity pre-checks for cloudflared. This runs in a separate
+	// goroutine, as we want to keep initializing cloudflared while prechecks
+	// are running. Prechecks are controlled via DNS flag for remote kill-switch capability.
+	if !tunnelConfig.ClientConfig.ConnectionFeaturesSnapshot().SkipPrechecks && !c.Bool(cfdflags.NoPrechecks) {
+		go runPrechecks(c, log, tunnelConfig.Region)
+	}
 
 	// Disable ICMP packet routing for quick tunnels
 	if quickTunnelURL != "" {
@@ -943,13 +939,6 @@ func configureCloudflaredFlags(shouldHide bool) []cli.Flag {
 			Name:    cfdflags.NoPrechecks,
 			Usage:   "Skip connectivity pre-checks at startup.",
 			EnvVars: []string{"TUNNEL_NO_PRECHECKS"},
-			Value:   false,
-			Hidden:  shouldHide,
-		}),
-		altsrc.NewBoolFlag(&cli.BoolFlag{
-			Name:    cfdflags.Prechecks,
-			Usage:   "Run connectivity pre-checks at startup.",
-			EnvVars: []string{"TUNNEL_PRECHECKS"},
 			Value:   false,
 			Hidden:  shouldHide,
 		}),

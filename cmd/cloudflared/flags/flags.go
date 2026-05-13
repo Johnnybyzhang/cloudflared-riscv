@@ -126,9 +126,6 @@ const (
 	// NoPrechecks is the command line flag to skip connectivity pre-checks at startup.
 	NoPrechecks = "no-prechecks"
 
-	// Prechecks is the command line flag to run connectivity pre-checks at startup.
-	Prechecks = "prechecks"
-
 	// LogLevel is the command line flag for the cloudflared logging level
 	LogLevel = "loglevel"
 

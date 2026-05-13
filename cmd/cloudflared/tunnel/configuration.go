@@ -252,7 +252,6 @@ func prepareTunnelConfig(
 		QUICConnectionLevelFlowControlLimit: c.Uint64(flags.QuicConnLevelFlowControlLimit),
 		QUICStreamLevelFlowControlLimit:     c.Uint64(flags.QuicStreamLevelFlowControlLimit),
 		NoPrechecks:                         c.Bool(flags.NoPrechecks),
-		Prechecks:                           c.Bool(flags.Prechecks),
 		OriginDNSService:                    dnsService,
 		OriginDialerService:                 originDialerService,
 	}
