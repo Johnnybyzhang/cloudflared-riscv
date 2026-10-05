@@ -1,3 +1,9 @@
+2026.10.0
+- 2026-09-29 VULN-141859: Normalize request path when using access rules
+- 2026-09-28 chore: Retry DNS resolution
+- 2026-09-25 chore: stabilize websocket event tests
+- 2026-08-24 TUN-10808: Cancel QUIC reads when request bodies close
+
 2026.9.3
 - 2026-09-24 chore: Update dependencies
 
