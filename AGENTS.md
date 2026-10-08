@@ -92,9 +92,6 @@ Notes on linting:
   protocols.
 - `features/`: Runtime feature flags including `PostQuantumMode`
   (`PostQuantumPrefer` = default, `PostQuantumStrict` = `--post-quantum`).
-- `fips/`: Build-tag driven FIPS detection. Only `fips.IsFipsEnabled()` is
-  exposed; never branch on `fipsEnabled` inside a function if the two
-  branches return the same value.
 
 ### Function and Method Guidelines
 
@@ -220,6 +217,10 @@ type TunnelProperties struct {
   `fipsEnabled` branch in curve-selection code; if the two modes ever
   diverge, express the divergence inside `crypto/` so call sites remain
   untouched.
+- FIPS and non-FIPS artifacts remain separate. Ordinary builds use
+  `GOFIPS140=off`; `FIPS=true` builds and internal container images use
+  `GOFIPS140=latest`. This runtime-level distinction enforces FIPS algorithms
+  for origin connections without changing the explicit edge curve list above.
 - HTTP/2 supports post-quantum handshakes. Never re-add a
   `PostQuantumStrict`-based rejection to H2 code paths, and never force
   `--post-quantum` to select QUIC-only in protocol selection.

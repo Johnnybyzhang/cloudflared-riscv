@@ -4,8 +4,8 @@
   outputDir: artifacts
   runner: linux-x86-8cpu-16gb
   stage: build
-  golangVersion: "boring-1.26"
-  imageVersion: "3625-1801d52@sha256:9261597bc2d229c997522848260de758567643d58ae1097196ae368db89a1d0f"
+  golangVersion: "1.27"
+  imageVersion: "3703-2fe662ebe6c7@sha256:60e4b3aac0f3558bfa85afc65b36b7cd09dd44aef71daaee65a6afd41c6e9458"
   CGO_ENABLED: 1
 
 .default-packaging-job: &packaging-job-defaults
@@ -30,7 +30,7 @@ include:
   ###################
   ### Linux Build ###
   ###################
-  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/boring-make@~latest
+  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/make@~latest
     inputs:
       <<: *golang_inputs
       jobPrefix: linux-build
@@ -39,7 +39,7 @@ include:
   ########################
   ### Linux FIPS Build ###
   ########################
-  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/boring-make@~latest
+  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/make@~latest
     inputs:
       <<: *golang_inputs
       jobPrefix: linux-fips-build
@@ -48,7 +48,7 @@ include:
   #################
   ### Unit Tests ##
   #################
-  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/boring-make@~latest
+  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/make@~latest
     inputs:
       <<: *golang_inputs
       stage: test
@@ -58,7 +58,7 @@ include:
   ######################
   ### Unit Tests FIPS ##
   ######################
-  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/boring-make@~latest
+  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/make@~latest
     inputs:
       <<: *golang_inputs
       stage: test
@@ -68,7 +68,7 @@ include:
   #################
   ### Vuln Check ##
   #################
-  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/boring-make@~latest
+  - component: $CI_SERVER_FQDN/cloudflare/ci/golang/make@~latest
     inputs:
       <<: *golang_inputs
       runOnBranches: "^$"
@@ -84,7 +84,7 @@ linux-component-tests: &linux-component-tests
   extends: .component-tests
   needs:
     - ci-image-get-image-ref
-    - linux-build-boring-make
+    - linux-build-make
   script:
     - ./.ci/scripts/component-tests.sh
   variables: &component-tests-variables
@@ -103,7 +103,7 @@ linux-component-tests-fips:
   <<: *linux-component-tests
   needs:
     - ci-image-get-image-ref
-    - linux-fips-build-boring-make
+    - linux-fips-build-make
   variables:
     <<: *component-tests-variables
     COMPONENT_TESTS_FIPS: 1

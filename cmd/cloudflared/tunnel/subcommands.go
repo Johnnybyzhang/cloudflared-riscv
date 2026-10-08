@@ -30,7 +30,6 @@ import (
 	"github.com/cloudflare/cloudflared/config"
 	"github.com/cloudflare/cloudflared/connection"
 	"github.com/cloudflare/cloudflared/diagnostic"
-	"github.com/cloudflare/cloudflared/fips"
 	"github.com/cloudflare/cloudflared/metrics"
 )
 
@@ -155,7 +154,6 @@ var (
 		Usage:   "When given creates an experimental post-quantum secure tunnel",
 		Aliases: []string{"pq"},
 		EnvVars: []string{"TUNNEL_POST_QUANTUM"},
-		Hidden:  fips.IsFipsEnabled(),
 	})
 	sortInfoByFlag = &cli.StringFlag{
 		Name:    "sort-by",

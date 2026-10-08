@@ -1,10 +1,13 @@
 # use a builder image for building cloudflare
 ARG TARGET_GOOS
 ARG TARGET_GOARCH
-FROM golang:1.26.8 AS builder
+FROM golang:1.27.1 AS builder
+ARG TARGET_GOOS
+ARG TARGET_GOARCH
+ARG GOPROXY=https://athens.cfdata.org|https://proxy.golang.org|direct
 ENV GO111MODULE=on \
   CGO_ENABLED=0 \
-  GOPROXY=https://athens.cfdata.org|https://proxy.golang.org|direct \
+  GOPROXY=${GOPROXY} \
   TARGET_GOOS=${TARGET_GOOS} \
   TARGET_GOARCH=${TARGET_GOARCH} \
   # the CONTAINER_BUILD envvar is used set github.com/cloudflare/cloudflared/metrics.Runtime=virtual

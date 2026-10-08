@@ -1,9 +1,10 @@
-# use a builder image for building cloudflared
+# use the internal builder image for building cloudflared
 ARG CLOUDFLARE_DOCKER_REGISTRY_HOST
-FROM ${CLOUDFLARE_DOCKER_REGISTRY_HOST:-registry.cfdata.org}/stash/plat/dockerfiles/debian-trixie-golang-boring/master:1.26.8-1@sha256:2cff81b1547df7c6bfe0cdba17b76678054d5054bedd71809be0829e5f3fc652 AS builder
+FROM ${CLOUDFLARE_DOCKER_REGISTRY_HOST:-registry.cfdata.org}/stash/plat/dockerfiles/debian-trixie-golang/master:1.27.1-1@sha256:80610a8a9aba72462b24ad9d306621f61524e8ae684d82777369640179ef5bba AS builder
+ARG GOPROXY=https://athens.cfdata.org|https://proxy.golang.org|direct
 ENV GO111MODULE=on \
-  CGO_ENABLED=1 \
-  GOPROXY=https://athens.cfdata.org|https://proxy.golang.org|direct \
+  CGO_ENABLED=0 \
+  GOPROXY=${GOPROXY} \
   # the CONTAINER_BUILD envvar is used set github.com/cloudflare/cloudflared/metrics.Runtime=virtual
   # which changes how cloudflared binds the metrics server
   CONTAINER_BUILD=1

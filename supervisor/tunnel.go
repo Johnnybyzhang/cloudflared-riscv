@@ -23,7 +23,6 @@ import (
 	"github.com/cloudflare/cloudflared/edgediscovery"
 	"github.com/cloudflare/cloudflared/edgediscovery/allregions"
 	"github.com/cloudflare/cloudflared/features"
-	"github.com/cloudflare/cloudflared/fips"
 	"github.com/cloudflare/cloudflared/ingress"
 	"github.com/cloudflare/cloudflared/ingress/origins"
 	"github.com/cloudflare/cloudflared/management"
@@ -676,10 +675,9 @@ func (e *EdgeTunnelServer) reportErrorToSentry(err error, pqMode features.PostQu
 		transportErr, ok := dialErr.Cause.(*quic.TransportError)
 		if ok &&
 			transportErr.ErrorCode.IsCryptoError() &&
-			fips.IsFipsEnabled() &&
 			pqMode == features.PostQuantumStrict {
-			// Only report to Sentry when using FIPS, PQ,
-			// and the error is a Crypto error reported by
+			// Only report to Sentry when using strict PQ and the error
+			// is a Crypto error reported by
 			// an EdgeQuicDialError
 			sentry.CaptureException(err)
 		}

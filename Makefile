@@ -42,10 +42,10 @@ endif
 
 LINK_FLAGS :=
 ifeq ($(FIPS), true)
-	LINK_FLAGS := -linkmode=external -extldflags=-static $(LINK_FLAGS)
-	# Prevent linking with libc regardless of CGO enabled or not.
-	GO_BUILD_TAGS := $(GO_BUILD_TAGS) osusergo netgo fips
+	export GOFIPS140 := latest
 	VERSION_FLAGS := $(VERSION_FLAGS) -X "main.BuildType=FIPS"
+else
+	export GOFIPS140 := off
 endif
 
 LDFLAGS := -ldflags='$(VERSION_FLAGS) $(LINK_FLAGS)'
@@ -105,8 +105,10 @@ endif
 
 ifeq ($(TARGET_OS), windows)
 	EXECUTABLE_PATH=./$(BINARY_NAME).exe
+	BUILT_BINARY_PATH=./cloudflared.exe
 else
 	EXECUTABLE_PATH=./$(BINARY_NAME)
+	BUILT_BINARY_PATH=./cloudflared
 endif
 
 ifeq ($(FLAVOR), centos-7)
@@ -143,21 +145,20 @@ vulncheck:
 
 .PHONY: cloudflared
 cloudflared:
-ifeq ($(FIPS), true)
-	$(info Building cloudflared with go-fips)
-endif
+	$(if $(filter true,$(FIPS)),$(info Building cloudflared with Go's FIPS 140 module))
 	GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) $(ARM_COMMAND) go build -mod=readonly $(GO_BUILD_TAGS) $(LDFLAGS) $(IMPORT_PATH)/cmd/cloudflared
+
 ifeq ($(FIPS), true)
-	./check-fips.sh cloudflared
+	./check-fips.sh $(BUILT_BINARY_PATH)
 endif
 
 .PHONY: container
 container:
 	docker build --build-arg=TARGET_ARCH=$(TARGET_ARCH) --build-arg=TARGET_OS=$(TARGET_OS) -t cloudflare/cloudflared-$(TARGET_OS)-$(TARGET_ARCH):"$(VERSION)" .
 
-.PHONY: container-fips
-container-fips:
-	docker build -f Dockerfile.fips.$(TARGET_ARCH) -t cloudflare/cloudflared-fips-linux-$(TARGET_ARCH):"$(VERSION)" .
+.PHONY: container-internal
+container-internal:
+	docker build -f Dockerfile.internal.$(TARGET_ARCH) -t cloudflare/cloudflared-internal-linux-$(TARGET_ARCH):"$(VERSION)" .
 
 .PHONY: generate-docker-version
 generate-docker-version:

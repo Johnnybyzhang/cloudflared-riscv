@@ -18,7 +18,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/http2"
 
 	"github.com/cloudflare/cloudflared/client"
 	"github.com/cloudflare/cloudflared/tracing"
@@ -27,7 +26,17 @@ import (
 	"github.com/cloudflare/cloudflared/tunnelrpc/pogs"
 )
 
-var testTransport = http2.Transport{}
+func newTestHTTP2ClientConn(ctx context.Context, conn net.Conn) (*http.ClientConn, error) {
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	transport := &http.Transport{
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			return conn, nil
+		},
+		Protocols: protocols,
+	}
+	return transport.NewClientConn(ctx, "http", "localhost:8080")
+}
 
 func newTestHTTP2Connection() (*HTTP2Connection, net.Conn) {
 	edgeConn, cfdConn := net.Pipe()
@@ -69,7 +78,7 @@ func TestHTTP2ConfigurationSet(t *testing.T) {
 		_ = http2Conn.Serve(ctx)
 	}()
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeConn)
 	require.NoError(t, err)
 
 	reqBody := []byte(`{
@@ -137,7 +146,7 @@ func TestServeHTTP(t *testing.T) {
 		_ = http2Conn.Serve(ctx)
 	}()
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeConn)
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -309,8 +318,7 @@ func TestNoWriteAfterServeHTTPReturns(t *testing.T) {
 		_ = cfdHTTP2Conn.Serve(ctx)
 	}()
 
-	edgeTransport := http2.Transport{}
-	edgeHTTP2Conn, err := edgeTransport.NewClientConn(edgeTCPConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeTCPConn)
 	require.NoError(t, err)
 	message := []byte(t.Name())
 
@@ -390,7 +398,7 @@ func TestServeControlStream(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set(InternalUpgradeHeader, ControlStreamUpgrade)
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeConn)
 	require.NoError(t, err)
 
 	wg.Add(1)
@@ -444,7 +452,7 @@ func TestFailRegistration(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set(InternalUpgradeHeader, ControlStreamUpgrade)
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeConn)
 	require.NoError(t, err)
 	resp, err := edgeHTTP2Conn.RoundTrip(req)
 	require.NoError(t, err)
@@ -495,7 +503,7 @@ func TestGracefulShutdownHTTP2(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set(InternalUpgradeHeader, ControlStreamUpgrade)
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeConn)
 	require.NoError(t, err)
 
 	wg.Add(1)
@@ -543,7 +551,7 @@ func TestServeTCP_RateLimited(t *testing.T) {
 		_ = http2Conn.Serve(ctx)
 	}()
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(t.Context(), edgeConn)
 	require.NoError(t, err)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8080", nil)
@@ -577,7 +585,7 @@ func benchmarkServeHTTP(b *testing.B, test testRequest) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	require.NoError(b, err)
 
-	edgeHTTP2Conn, err := testTransport.NewClientConn(edgeConn)
+	edgeHTTP2Conn, err := newTestHTTP2ClientConn(b.Context(), edgeConn)
 	require.NoError(b, err)
 
 	b.ResetTimer()
